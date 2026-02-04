@@ -2,6 +2,8 @@ package com.csvtool.csvsqltool.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.KeyValuePair;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -13,6 +15,13 @@ import java.util.*;
 @Service
 public class CsvService {
     private static final Logger log = LoggerFactory.getLogger(CsvService.class);
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public CsvService(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
 
     private String detectColumnType(List<String[]> rows, int colIndex) {
         boolean isInt = true;
@@ -70,10 +79,35 @@ public class CsvService {
         response.put("headers", headers);
         response.put("columns", columnTypes);
         response.put("rowsCount", rows.size());
+        response.put("rows", rows);
 
         log.info("CSV parsed successfully: {} rows, {} columns", rows.size(), headers.length);
 
         return response;
+    }
+
+
+    public void createTable(String tableName, Map<String, String> columns) {
+        StringBuilder sql = new StringBuilder("CREATE TABLE " + tableName + " (");
+
+        for (Map.Entry<String, String> entry : columns.entrySet()) {
+            String colName = entry.getKey();
+            String colType = entry.getValue();
+
+            if (colType.equals("VARCHAR")) {
+                colType += "(255)";
+            }
+
+            sql.append(colName).append(" ").append(colType).append(", ");
+        }
+
+        sql.setLength(sql.length() - 2);
+        sql.append(")");
+
+        String sqlCmd = sql.toString();
+        jdbcTemplate.execute(sqlCmd);
+
+        log.info("Table '{}' created successfully in H2", tableName);
     }
 
 }

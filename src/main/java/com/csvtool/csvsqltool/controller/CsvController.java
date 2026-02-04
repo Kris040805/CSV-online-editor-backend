@@ -32,10 +32,22 @@ public class CsvController {
         }
 
         try {
+            // Reading CSV
             InputStream is = file.getInputStream();
-            Map<String, Object> result = csvService.parseCsv(is);
-            result.put("tableName", "temporary_table");
-            return ResponseEntity.ok(result);
+            Map<String, Object> parsedData = csvService.parseCsv(is);
+
+            // Taking columns from parsedData
+            Map<String, String> columns = (Map<String, String>) parsedData.get("columns");
+
+            // Create table in H2
+            String tableName = "temporary_table";
+            csvService.createTable(tableName, columns);
+
+            // Adding tabName
+            parsedData.put("tableName", tableName);
+
+            return ResponseEntity.ok(parsedData);
+
         } catch (IOException e) {
             return ResponseEntity.status(500).body(Map.of("error", "Error reading file"));
         }
