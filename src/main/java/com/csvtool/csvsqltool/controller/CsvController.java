@@ -1,6 +1,8 @@
 package com.csvtool.csvsqltool.controller;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,20 +14,50 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.*;
+
 
 @RestController
 @RequestMapping("/api")
 public class CsvController {
 
-    @PostMapping("/import-csv")
-    public ResponseEntity<String> importCsv(@RequestParam("csvFile") MultipartFile file) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("Empty fail");
+    private static final Logger log = LoggerFactory.getLogger(CsvController.class);
+
+
+    private String detectColumnType(List<String[]> rows, int colIndex) {
+        boolean isInt = true;
+        boolean isDouble = true;
+        boolean isBool = true;
+
+        for (String[] row : rows) {
+
+            if (colIndex >= row.length) {
+                return "VARCHAR";
+            }
+
+            String value = row[colIndex].trim();
+
+            if (value.isEmpty()) {
+                return "VARCHAR";
+            }
+
+            isBool = isBool && (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false"));
+            isInt = isInt && value.matches("\\d+");
+            isDouble = isDouble && value.matches("\\d+(\\.\\d+)?");
         }
 
-        String fileName = file.getOriginalFilename();
+        if (isBool) return "BOOLEAN";
+        if (isInt) return "INT";
+        if (isDouble) return "DOUBLE";
+        return "VARCHAR";
+    }
 
-//        System.out.println("Received file: " + fileName);
+
+    @PostMapping("/import-csv")
+    public ResponseEntity<Map<String, Object>> importCsv(@RequestParam("csvFile") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "CSV is empty"));
+        }
 
         try {
             InputStream is = file.getInputStream();
@@ -34,34 +66,35 @@ public class CsvController {
             // Header
             String headerLine = br.readLine();
             String[] headers = headerLine.split(",");
-            System.out.println("HEADER:");
-            for (String h : headers) {
-                System.out.println(h);
-            }
+
 
             // Rows
+            List<String[]> rows = new ArrayList<>();
             String line;
             while ((line = br.readLine()) != null) {
-                String[] row = line.split(",");
-                System.out.println("ROW:");
-                for (String cell : row) {
-                    if (cell.matches("\\d+")) {
-                        System.out.println(cell + "is INT");
-                    } else if (cell.matches("\\d+\\.\\d+")) {
-                        System.out.println(cell + "is DOUBLE");
-                    } else if (cell.equalsIgnoreCase("true") || cell.equalsIgnoreCase("false")) {
-                        System.out.println(cell + "is BOOLEAN");
-                    } else {
-                        System.out.println(cell + "is String");
-                    }
-                }
+                rows.add(line.split(","));
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("Error reading file");
-        }
 
-        return ResponseEntity.ok("The file is received: " + fileName);
+            Map<String, String> columnTypes = new LinkedHashMap<>();
+            for (int col = 0; col < headers.length; col++) {
+                String type = detectColumnType(rows, col);
+                columnTypes.put(headers[col].trim(), type);
+            }
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("tableName", "temporary_table");
+            response.put("headers", headers);
+            response.put("columns", columnTypes);
+            response.put("rowsCount", rows.size());
+
+            log.info("CSV parsed successfully: {} rows, {} columns", rows.size(), headers.length);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IOException e) {
+            log.error("Error while reading CSV file", e);
+            return ResponseEntity.status(500).body(Map.of("error", "Error reading file"));
+        }
     }
 
 }
