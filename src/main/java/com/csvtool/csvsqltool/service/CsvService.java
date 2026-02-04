@@ -51,6 +51,7 @@ public class CsvService {
         return "VARCHAR";
     }
 
+
     public Map<String, Object> parseCsv(InputStream inputStream) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
 
