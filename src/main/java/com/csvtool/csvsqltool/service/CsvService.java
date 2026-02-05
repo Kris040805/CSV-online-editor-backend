@@ -129,6 +129,7 @@ public class CsvService {
         log.info("inserted {} rows into table '{}'", rows.size(), tableName);
     }
 
+
     public Map<String, Object> importCsv(InputStream inputStream) throws IOException {
 
         Map<String, Object> parsed = parseCsv(inputStream);
@@ -142,7 +143,15 @@ public class CsvService {
         createTable(tableName, columns);
         insertRows(tableName, headers, rows);
 
-        return parsed;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("tableName", tableName);
+        response.put("rows", rows.size());
+        response.put("columns", headers.length);
+        response.put("headers", headers);
+
+
+        return response;
     }
 
 }

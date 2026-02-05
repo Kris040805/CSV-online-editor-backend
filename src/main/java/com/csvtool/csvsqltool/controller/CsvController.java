@@ -33,7 +33,8 @@ public class CsvController {
 
         try {
 
-            return ResponseEntity.ok(csvService.importCsv(file.getInputStream()));
+            Map<String, Object> result = csvService.importCsv(file.getInputStream());
+            return ResponseEntity.ok(result);
 
         } catch (IOException e) {
             return ResponseEntity.status(500).body(Map.of("error", "Error reading file"));
