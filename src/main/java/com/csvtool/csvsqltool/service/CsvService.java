@@ -1,14 +1,14 @@
 package com.csvtool.csvsqltool.service;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -52,23 +52,34 @@ public class CsvService {
     }
 
 
-    private Map<String, Object> parseCsv(InputStream inputStream) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
 
-        String headerLine = br.readLine();
-        if (headerLine == null) {
-            throw new IOException("CSV is empty");
-        }
-        String[] headers = headerLine.split(",");
+    private Map<String, Object> parseCsv(InputStream inputStream) throws IOException {
+        Reader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+
+        CSVParser csvParser = CSVFormat.DEFAULT
+                .withFirstRecordAsHeader()
+                .withTrim()
+                .parse(reader);
+
+        // Headers
+        List<String> headersList = csvParser.getHeaderNames();
+        String[] headers = headersList.toArray(new String[0]);
 
 
         // Rows
         List<String[]> rows = new ArrayList<>();
-        String line;
-        while ((line = br.readLine()) != null) {
-            rows.add(line.split(","));
+
+        for (CSVRecord record : csvParser){
+            String[] row = new String[headers.length];
+
+            for (int i = 0; i < headers.length; i++) {
+                row[i] = record.get(i);
+            }
+
+            rows.add(row);
         }
 
+        // Detect column types
         Map<String, String> columnTypes = new LinkedHashMap<>();
         for (int col = 0; col < headers.length; col++) {
             String type = detectColumnType(rows, col);
@@ -86,6 +97,44 @@ public class CsvService {
 
         return response;
     }
+
+
+
+
+//    private Map<String, Object> parseCsv(InputStream inputStream) throws IOException {
+//        BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
+//
+//        String headerLine = br.readLine();
+//        if (headerLine == null) {
+//            throw new IOException("CSV is empty");
+//        }
+//        String[] headers = headerLine.split(",");
+//
+//
+//        // Rows
+//        List<String[]> rows = new ArrayList<>();
+//        String line;
+//        while ((line = br.readLine()) != null) {
+//            rows.add(line.split(","));
+//        }
+//
+//        Map<String, String> columnTypes = new LinkedHashMap<>();
+//        for (int col = 0; col < headers.length; col++) {
+//            String type = detectColumnType(rows, col);
+//            columnTypes.put(headers[col].trim(), type);
+//        }
+//
+//        Map<String, Object> response = new LinkedHashMap<>();
+//        response.put("tableName", "temporary_table");
+//        response.put("headers", headers);
+//        response.put("columns", columnTypes);
+//        response.put("rowsCount", rows.size());
+//        response.put("rows", rows);
+//
+//        log.info("CSV parsed successfully: {} rows, {} columns", rows.size(), headers.length);
+//
+//        return response;
+//    }
 
 
     private void createTable(String tableName, Map<String, String> columns) {
@@ -155,7 +204,38 @@ public class CsvService {
         return response;
     }
 
+
+
+    private static final List<String> FORBIDDEN_KEYWORDS = List.of(
+            "drop",
+            "truncate",
+            "alter"
+    );
+
+    private void validateSql(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("SQL query is empty");
+        }
+
+        String normalized = query.trim().toLowerCase();
+
+        for (String keyword : FORBIDDEN_KEYWORDS) {
+            if (normalized.contains(keyword)) {
+                throw new IllegalArgumentException("Forbidden SQL operation: " + keyword.toUpperCase());
+            }
+        }
+
+        // Забраняваме DELETE без WHERE
+        if (normalized.startsWith("delete") && !normalized.contains("where")) {
+            throw new IllegalArgumentException("DELETE without WHERE is not allowed");
+        }
+    }
+
+
+
     public Map<String, Object> executeSql(String query) {
+        validateSql(query);
+
         String normalized = query.trim().toLowerCase();
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -195,10 +275,6 @@ public class CsvService {
     }
 
 
-
-
-
-
     public byte[] exportCsv(String tableName) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("SELECT * FROM " + tableName);
 
@@ -229,4 +305,6 @@ public class CsvService {
         log.info("Exported {} rows from table '{}'", rows.size(), tableName);
         return csvBuilder.toString().getBytes(StandardCharsets.UTF_8);
     }
+
+
 }

@@ -46,23 +46,31 @@ public class CsvController {
 
 
     @PostMapping("/execute-sql")
-    public ResponseEntity<Map<String, Object>> executeSql(@RequestBody SqlRequest request){
+    public ResponseEntity<Map<String, Object>> executeSql(@RequestBody SqlRequest request) {
         Map<String, Object> result = new LinkedHashMap<>();
 
         try {
             result = csvService.executeSql(request.getQuery());
             return ResponseEntity.ok(result);
+
+        } catch (IllegalArgumentException e) {
+            // Client error (validation)
+            log.warn("Invalid SQL query: {}", request.getQuery());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Invalid SQL query"));
+
         } catch (Exception e) {
-            // хващаме грешки от jdbcTemplate или Service слоя
+            // Server error
             result.put("error", "SQL execution failed: " + e.getMessage());
             log.error("SQL execution failed: {}", request.getQuery(), e);
             return ResponseEntity.status(500).body(result);
         }
+
     }
 
 
     @PostMapping("/export-csv")
-    public ResponseEntity<byte[]> exportCsv(@RequestBody ExportRequest request){
+    public ResponseEntity<byte[]> exportCsv(@RequestBody ExportRequest request) {
         try {
             byte[] csvData = csvService.exportCsv(request.getTableName());
 
