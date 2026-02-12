@@ -52,7 +52,6 @@ public class CsvService {
     }
 
 
-
     private Map<String, Object> parseCsv(InputStream inputStream) throws IOException {
         Reader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
 
@@ -69,7 +68,7 @@ public class CsvService {
         // Rows
         List<String[]> rows = new ArrayList<>();
 
-        for (CSVRecord record : csvParser){
+        for (CSVRecord record : csvParser) {
             String[] row = new String[headers.length];
 
             for (int i = 0; i < headers.length; i++) {
@@ -169,7 +168,6 @@ public class CsvService {
     }
 
 
-
     private static final List<String> FORBIDDEN_KEYWORDS = List.of(
             "drop",
             "truncate",
@@ -238,6 +236,29 @@ public class CsvService {
     }
 
 
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        boolean containsSpecialChar =
+                value.contains(",") ||
+                        value.contains("\"") ||
+                        value.contains("\n") ||
+                        value.contains("\r");
+
+        if (value.contains("\"")) {
+            value = value.replace("\"", "\"\"");
+        }
+
+        if (containsSpecialChar) {
+            value = "\"" + value + "\"";
+        }
+
+        return value;
+    }
+
+
     public byte[] exportCsv(String tableName) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("SELECT * FROM " + tableName);
 
@@ -259,8 +280,8 @@ public class CsvService {
                 Object val = row.get(col);
 
                 String res = val == null ? "" : val.toString();
+                values.add(escapeCsv(res));
 
-                values.add(res);
             }
             csvBuilder.append(String.join(",", values)).append("\n");
         }
@@ -270,7 +291,7 @@ public class CsvService {
     }
 
 
-    private void dropTableIfExists(String tableName){
+    private void dropTableIfExists(String tableName) {
         String sql = "DROP TABLE IF EXISTS " + tableName;
         jdbcTemplate.execute(sql);
         log.info("Dropped table '{}' if it existed", tableName);
